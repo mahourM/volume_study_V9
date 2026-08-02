@@ -1,0 +1,253 @@
+هدف نهایی
+Python برای هر symbol/timeframe آخرین zone state را نگه دارد.
+Python با تغییر state تایم‌فریم‌های پایین‌تر، entry/exit را دوباره evaluate کند.
+Python final_stop_loss را محاسبه کند.
+خروجی تصمیم Python به شکل OPEN / CLOSE / NONE آماده شود.
+MT5 فقط executor باشد و stateهای M1/M5/M15 را دریافت نکند.
+1. Zone State Store در Python
+فایل جدید پیشنهادی:
+absorption/trading_zone_state.py
+ساختار:
+text
+
+
+
+symbol
+timeframe
+zone_id
+side
+suggested_stop_loss
+
+برای نبود zone معتبر:
+text
+
+
+
+zone_id = ""
+side = "NEUTRAL"
+suggested_stop_loss = None
+
+Store با key:
+text
+
+
+
+(symbol, timeframe)
+
+این store فقط در Python مصرف می‌شود و هیچ state report به MT5 ارسال نمی‌شود.
+2. آپدیت state بعد از closed candle
+فایل هدف:
+absorption/absorption_runtime.py
+بعد از:
+closed candle processing
+zone detection/update
+expire/prune clusterها
+برای تایم‌فریم‌های:
+text
+
+
+
+M1, M5, M15, M30
+
+state همان symbol/timeframe refresh شود.
+اگر active valid zone وجود دارد:
+zone_id = cluster_id
+side = BUY/SELL
+suggested_stop_loss محاسبه شود
+اگر وجود ندارد:
+side = NEUTRAL
+zone_id = ""
+suggested_stop_loss = None
+اگر state تغییر نکرد، trigger تکراری ساخته نشود.
+3. محاسبه suggested_stop_loss
+محل:
+داخل همان state refresh در Python
+قانون:
+اگر zone BUY است:suggested_stop_loss = low کندلی که zone را ساخته
+
+اگر zone SELL است:suggested_stop_loss = high همان کندل
+
+منبع کندل:
+closed kline cache فعلی Python
+بر اساس:symbol
+timeframe
+source_candle_open_time_utc_ms
+
+اگر source candle پیدا نشد:
+state ثبت شود
+ولی suggested_stop_loss = None
+4. Python TradingDecisionEngine
+فایل جدید پیشنهادی:
+absorption/trading_decision_engine.py
+وظیفه:
+فقط تصمیم entry/exit بگیرد.
+zone detection logic را تغییر ندهد.
+thresholdها را تغییر ندهد.
+از zone state store و active trading zones استفاده کند.
+خروجی:
+text
+
+
+
+OPEN
+CLOSE
+NONE
+
+این engine نباید order sizing، margin، volume یا broker execution انجام دهد.
+5. Entry Evaluation در Python
+تایم‌فریم‌های معاملاتی:
+text
+
+
+
+M15, M30
+
+قانون M15:
+M15 zone فعال و معتبر باشد
+M1 مخالف نباشد
+M5 مخالف نباشد
+قانون M30:
+M30 zone فعال و معتبر باشد
+M15 مخالف نباشد
+M5 مخالف نباشد
+Trigger:
+تغییر state در M1/M5/M15 باعث re-evaluate همان symbol شود.
+برای M15، تغییر M1/M5 مهم است.
+برای M30، تغییر M15/M5 مهم است.
+نیاز به انتظار برای کندل بعدی M15/M30 نیست.
+6. محاسبه final_stop_loss
+محل:
+داخل TradingDecisionEngine
+قبل از ساخت command نهایی OPEN
+برای BUY:
+text
+
+
+
+final_stop_loss = min(
+  trading_timeframe_stop_loss,
+  same-direction lower timeframe suggested_stop_loss values
+)
+
+برای SELL:
+text
+
+
+
+final_stop_loss = max(
+  trading_timeframe_stop_loss,
+  same-direction lower timeframe suggested_stop_loss values
+)
+
+قواعد:
+فقط lower timeframeهای هم‌جهت وارد محاسبه شوند.
+NEUTRAL نادیده گرفته شود.
+تایم‌فریم مخالف که باعث reject می‌شود اصلاً وارد محاسبه stop-loss نشود.
+این فقط برای entry اولیه است.
+re-entry stop-loss logic تغییر نکند.
+7. Exit Evaluation در Python
+با هر state update در M1/M5/M15:
+اگر position باز برای همان symbol وجود دارد، exit هم دوباره evaluate شود.
+قوانین فعلی باید حفظ شوند:
+losing position فقط با stop-loss بسته شود.
+opposite zone فقط وقتی مجاز است باعث close شود که قوانین فعلی اجازه بدهند.
+برای M15 و M30 همان exit rules قبلی اعمال شوند.
+خروجی اگر لازم بود:
+text
+
+
+
+CLOSE command
+
+8. ارتباط Python و MT5
+MT5 نباید دریافت کند:
+stateهای M1/M5/M15
+conflict state
+گزارش lower timeframe
+MT5 فقط دریافت کند:
+command نهایی OPEN
+command نهایی CLOSE
+برای OPEN:
+symbol
+timeframe
+side
+position_id / cluster_id
+signal_time
+final_stop_loss
+zone_low / zone_high در صورت نیاز فعلی contract
+برای CLOSE:
+symbol
+timeframe
+side
+position_id
+exit_reason
+9. MT5 Executor
+فایل‌های هدف احتمالی:
+MT-side/VolumeStudy_Renderer.mq5
+MT-side/Execution/MetaTraderExecutionClient.mqh
+MT-side/Execution/TradingTypes.mqh
+MT5:
+conflict logic جدید نگیرد.
+lower timeframe state نگیرد.
+فقط command نهایی را اجرا کند.
+برای OPEN از final_stop_loss دریافتی استفاده کند.
+sizing/margin/order check فعلی MT5 با همان stop-loss نهایی اجرا شود.
+10. Logging
+Python log هنگام state update:
+text
+
+
+
+symbol
+timeframe
+zone_id
+side
+suggested_stop_loss
+
+Python log هنگام trigger:
+text
+
+
+
+symbol
+trading_timeframe
+trigger_source_timeframe
+trigger_side
+
+Python log هنگام final stop-loss:
+text
+
+
+
+symbol
+trading_timeframe
+entry_side
+trading_timeframe_stop_loss
+lower_timeframe_suggested_stop_losses
+final_stop_loss
+selected_stop_loss_source
+
+MT5 log:
+اجرای نهایی OPEN/CLOSE مثل قبل در CSV ثبت شود.
+state report جدا به MT5 اضافه نشود.
+11. موارد ممنوع
+تغییر نکند:
+zone detection logic
+thresholds
+timeoutها
+re-entry stop-loss
+margin/order logic
+risk percent
+volume calculation
+broker execution rules
+Kraken/MT5 behavior مگر در حد contract command مشترک
+12. Validation
+بعد از اجرا باید تایید شود:
+state store فقط داخل Python است.
+M1/M5/M15 با تغییر state باعث re-evaluate می‌شوند.
+M15 بدون کندل جدید خودش بعد از رفع conflict می‌تواند OPEN command تولید کند.
+M30 با تغییر M15/M5 دوباره evaluate می‌شود.
+final_stop_loss برای BUY پایین‌ترین stop هم‌جهت را انتخاب می‌کند.
+final_stop_loss برای SELL بالاترین stop هم‌جهت را انتخاب می‌کند.
+MT5 هیچ state report از lower timeframe دریافت نمی‌کند.
+MT5 فقط executor command نهایی است.

@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "symbols": {
+    "NQ.FUT": {
+      "mt5_symbol": "NQ",
+      "market_provider": "CME_LOCAL_DBN",
+      "dataset": "GLBX.MDP3",
+      "schema": "mbo",
+      "timeframe": "M1",
+      "tick_size": "0.25"
+    },
+    "ES.FUT": {
+      "mt5_symbol": "ES",
+      "market_provider": "CME_LOCAL_DBN",
+      "dataset": "GLBX.MDP3",
+      "schema": "mbo",
+      "timeframe": "M1",
+      "tick_size": "0.25"
+    }
+  },
+  "files": [
+    {
+      "path": "dom/NQ.FUT/2026-07-01.dbn.zst",
+      "data_type": "dom",
+      "provider_symbol": "NQ.FUT",
+      "start_utc": "2026-07-01T00:00:00Z",
+      "end_utc": "2026-07-02T00:00:00Z"
+    },
+    {
+      "path": "l2/NQ.FUT/2026-07-01.jsonl",
+      "data_type": "l2",
+      "provider_symbol": "NQ.FUT",
+      "schema": "l2",
+      "start_utc": "2026-07-01T00:00:00Z",
+      "end_utc": "2026-07-02T00:00:00Z"
+    }
+  ]
+}

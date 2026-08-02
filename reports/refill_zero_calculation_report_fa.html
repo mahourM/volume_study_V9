@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>گزارش منطق محاسبه سطوح با ریفیل صفر</title>
+  <style>
+    @page { size: A4; margin: 17mm 17mm 18mm; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: #17212b;
+      background: #fff;
+      font-family: Tahoma, "Segoe UI", sans-serif;
+      font-size: 11.2pt;
+      line-height: 1.9;
+    }
+    h1, h2 { page-break-after: avoid; }
+    h1 {
+      margin: 0 0 6mm;
+      padding-bottom: 4mm;
+      border-bottom: 2px solid #187b72;
+      color: #123d3a;
+      font-size: 21pt;
+      line-height: 1.5;
+    }
+    h2 {
+      margin: 7mm 0 2mm;
+      color: #15665f;
+      font-size: 14pt;
+    }
+    p { margin: 0 0 2.5mm; }
+    ul { margin: 1mm 0 3mm; padding-right: 7mm; }
+    li { margin: 0 0 1mm; }
+    .meta {
+      margin-bottom: 7mm;
+      color: #52606d;
+      font-size: 9.5pt;
+    }
+    .key {
+      padding: 4mm 5mm;
+      border-right: 4px solid #187b72;
+      background: #eef7f5;
+      page-break-inside: avoid;
+    }
+    .formula {
+      direction: ltr;
+      text-align: left;
+      margin: 3mm 0;
+      padding: 3mm 4mm;
+      border: 1px solid #cbd5df;
+      background: #f6f8fa;
+      color: #17212b;
+      font-family: Consolas, monospace;
+      font-size: 9.8pt;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      page-break-inside: avoid;
+    }
+    table {
+      width: 100%;
+      margin: 3mm 0 5mm;
+      border-collapse: collapse;
+      page-break-inside: avoid;
+    }
+    th, td {
+      padding: 2.4mm 3mm;
+      border: 1px solid #cbd5df;
+      text-align: right;
+      vertical-align: top;
+    }
+    th { background: #e8f2f0; color: #123d3a; }
+    code {
+      direction: ltr;
+      unicode-bidi: isolate;
+      font-family: Consolas, monospace;
+      font-size: 9.7pt;
+    }
+    .note {
+      padding: 3.5mm 4mm;
+      border: 1px solid #dfb65e;
+      background: #fff8e8;
+      page-break-inside: avoid;
+    }
+  </style>
+</head>
+<body>
+  <h1>گزارش منطق محاسبه سطوح با ریفیل صفر</h1>
+  <div class="meta">پروژه Volume Study V9 | مبنای گزارش: منطق فعلی Data Process Engine</div>
+
+  <div class="key">
+    آمار هر سطح به‌صورت مستقل برای هر کندل، قیمت و سمت محاسبه می‌شود. هدف این گزارش، مشخص‌کردن معنای مقادیر
+    <code>O</code>، <code>A</code>، <code>E</code> و نرخ اجرای نمایش‌داده‌شده در سطوح فاقد ریفیل است.
+  </div>
+
+  <h2>۱. کلید تجمیع</h2>
+  <p>هر سطح فعالیت با کلید زیر نگهداری می‌شود:</p>
+  <div class="formula">(symbol, timeframe, candle_open_time, price, side)</div>
+  <ul>
+    <li>فعالیت کندل‌های مختلف با یکدیگر ترکیب نمی‌شود.</li>
+    <li>سمت‌های BID و ASK مستقل هستند.</li>
+    <li>قیمت‌های مختلف مستقل هستند.</li>
+    <li>رویدادهای warm-up وارد آمار کندل انتخاب‌شده نمی‌شوند.</li>
+  </ul>
+
+  <h2>۲. محاسبه تعداد سفارش‌ها؛ O</h2>
+  <div class="formula">O = count(distinct order_id) per candle, price and side</div>
+  <p>
+    <code>O</code> تعداد شناسه‌های سفارش یکتایی است که در همان کندل، قیمت و سمت فعالیت داشته‌اند. فعالیت می‌تواند
+    Add، Modify، Fill یا Cancel/Delete باشد.
+  </p>
+  <p>
+    اگر یک سفارش در همان سطح چندین رویداد داشته باشد، فقط یک بار شمرده می‌شود. برای مثال زنجیره
+    <code>Add → Fill → Modify → Fill → Cancel</code> برای یک شناسه، نتیجه <code>O1</code> می‌دهد.
+  </p>
+  <div class="note">
+    <strong>نکته:</strong> O فقط تعداد Addهای جدید نیست. سفارش باقی‌مانده از کندل قبل نیز اگر در کندل فعلی Fill، Modify یا
+    Cancel شود، در O همان کندل شمرده می‌شود؛ زیرا در آن سطح فعالیت داشته است.
+  </div>
+
+  <h2>۳. محاسبه نقدینگی اضافه‌شده؛ A</h2>
+  <p><code>A</code> مجموع نقدینگی واقعاً اضافه‌شده به همان سطح در همان کندل است.</p>
+  <table>
+    <thead><tr><th>رویداد</th><th>اثر بر A</th></tr></thead>
+    <tbody>
+      <tr><td>Add</td><td>کل اندازه اولیه سفارش به A اضافه می‌شود.</td></tr>
+      <tr><td>Modify افزایشی</td><td>فقط اختلاف مثبت اندازه جدید و اندازه قبلی اضافه می‌شود.</td></tr>
+      <tr><td>Modify کاهشی</td><td>چیزی به A اضافه نمی‌شود؛ مقدار کاهش‌یافته withdrawn است.</td></tr>
+      <tr><td>Fill</td><td>اثری بر A ندارد.</td></tr>
+      <tr><td>Cancel/Delete</td><td>اثری بر A ندارد و execution محسوب نمی‌شود.</td></tr>
+    </tbody>
+  </table>
+  <div class="formula">added_qty = max(0, size_after_modify - size_before_modify)
+A += added_qty</div>
+  <p>مثال: تغییر اندازه از ۱۰ به ۱۴ باعث اضافه‌شدن ۴ قرارداد به A می‌شود، نه ۱۴ قرارداد.</p>
+  <p>
+    در تغییر قیمت سفارش، اندازه باقی‌مانده در قیمت قبلی withdrawn و اندازه سفارش در قیمت جدید به‌عنوان نقدینگی
+    واردشده به سطح جدید ثبت می‌شود.
+  </p>
+
+  <h2>۴. محاسبه قراردادهای اجراشده؛ E</h2>
+  <p><code>E</code> مجموع قراردادهایی است که در همان کندل، قیمت و سمت واقعاً Fill شده‌اند.</p>
+  <div class="formula">executed_qty = min(fill_size, current_order_size)
+E += executed_qty</div>
+  <p>Modify کاهشی، Cancel و Delete در E قرار نمی‌گیرند.</p>
+
+  <h2>۵. نرخ اجرای سطح</h2>
+  <p>برای سطح فاقد refill، نرخ اجرا از فعالیت عمومی سطح محاسبه می‌شود:</p>
+  <div class="formula">level_execution_rate = (E / A) × 100
+if A == 0: level_execution_rate = 0%</div>
+  <p>قالب نمایش:</p>
+  <div class="formula">O{order_count} A{added_contracts} E{executed_contracts} - {rate}%</div>
+  <p>نمونه:</p>
+  <div class="formula">O12 A250 E125 - 50%</div>
+
+  <h2>۶. شرایط نمایش سطح با refill صفر</h2>
+  <p>وقتی آستانه refill برابر صفر باشد، سطحی با <code>refill_count = 0</code> تنها در صورت داشتن فعالیت نمایش داده می‌شود:</p>
+  <div class="formula">order_count > 0 OR added_contracts > 0 OR executed_contracts > 0</div>
+  <p>پس از آن، فیلترهای اختیاری کاربر اعمال می‌شوند:</p>
+  <table>
+    <thead><tr><th>فیلتر</th><th>شرط نمایش</th></tr></thead>
+    <tbody>
+      <tr><td><code>O10</code></td><td>تعداد سفارش‌های یکتا بزرگ‌تر یا مساوی ۱۰ باشد.</td></tr>
+      <tr><td><code>A250</code></td><td>سطح ASK باشد و A بزرگ‌تر یا مساوی ۲۵۰ باشد.</td></tr>
+      <tr><td><code>B250</code></td><td>سطح BID باشد و A بزرگ‌تر یا مساوی ۲۵۰ باشد.</td></tr>
+      <tr><td>Rate</td><td>نرخ اجرای سطح بزرگ‌تر یا مساوی درصد واردشده باشد.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>۷. اصلاح انجام‌شده</h2>
+  <p>
+    در نسخه قبلی، کندل جزو کلید state فعالیت قیمت نبود. در نتیجه سفارش‌های چند کندل و warm-up روی یک قیمت انباشته
+    و با زمان آخرین رویداد به یک کندل نسبت داده می‌شدند. این وضعیت باعث مقادیر غیرعادی O در سطوح refill صفر می‌شد.
+  </p>
+  <p>
+    اکنون state بر اساس کندل، قیمت و سمت تفکیک شده است. بنابراین دو سفارش در یک قیمت ولی در دو کندل مختلف، دو
+    خروجی مستقل <code>O1</code> ایجاد می‌کنند و به یک خروجی انباشته <code>O2</code> تبدیل نمی‌شوند.
+  </p>
+
+  <h2>۸. نتیجه نهایی</h2>
+  <p>
+    تعداد سفارش نمایش‌داده‌شده اکنون تعداد order_idهای یکتای فعال در همان کندل، همان قیمت و همان سمت است. تکرار
+    رویدادهای یک سفارش شمارش را افزایش نمی‌دهد و فعالیت سایر کندل‌ها وارد خروجی کندل جاری نمی‌شود.
+  </p>
+
+</body>
+</html>

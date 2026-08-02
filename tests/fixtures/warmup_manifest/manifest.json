@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "symbols": {
+    "NQ.FUT": {
+      "mt5_symbol": "NQ",
+      "schema": "mbo"
+    },
+    "ES.FUT": {
+      "mt5_symbol": "ES",
+      "schema": "l2"
+    }
+  },
+  "files": [
+    {
+      "path": "dom/NQ.FUT/2026-07-01.dbn.zst",
+      "data_type": "dom",
+      "provider_symbol": "NQ.FUT"
+    },
+    {
+      "path": "l2/ES.FUT/2026-07-01.jsonl",
+      "data_type": "l2",
+      "provider_symbol": "ES.FUT"
+    }
+  ]
+}
